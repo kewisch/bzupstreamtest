@@ -1,0 +1,222 @@
+{% from 'events/display/conference/_util.html' import format_event_date %}
+{% from 'events/contributions/management/_draft_mode_warning.html' import render_draft_mode_warning %}
+
+{% macro grid(halfhour, halfhour_span, room_index, room_span=1) %}
+  grid-row: room {{room_index|default(1)}} / span {{room_span|default(1)}}; grid-column: halfhour {{halfhour}} / span {{halfhour_span|default(1)}};
+{% endmacro %}
+
+{% macro show_entry(entry, parent=None, halfhour_base=1) %}
+  {% if entry.location_data and entry.location_data.room_name in rooms %}
+    {% set room = rooms[entry.location_data.room_name] %}
+    {% set room_index = room.index %}
+  {% endif %}
+  {% if parent %}
+    {% set room_index = 1 %}
+    {% set colors = "color: " + parent.textColor|default('black') +
+                    " !important; background-color: " +
+                    parent.color|default('#f8f2e8') + " !important;" %}
+  {% else %}
+    {% set colors = "color: " + entry.textColor|default('black') +
+                    " !important; background-color: " +
+                    entry.color|default('#f8f2e8') + " !important;" %}
+  {% endif %}
+
+  {% set halfhour = entry.halfhour_start|default(1) - halfhour_base + 1 %}
+
+  {% if entry.entryType == "Contribution" and not entry.subcontributions and entry.halfhour_span > 0 %}
+    <a href="{{entry.url}}"
+       class="contribution"
+       {% if management %}
+         draggable="true"
+         data-id="{{entry.scheduleEntryId|default('')}}"
+         data-contribution-id="{{entry.contributionId}}"
+         data-color="{{entry.textColor|default('black')}}"
+         data-background-color="{{entry.color|default('#f8f2e8')}}"
+         data-halfhour-start="{{halfhour}}"
+         data-halfhour-span="{{entry.halfhour_span}}"
+         {% if 'startDate' in entry %}
+           data-start-time="{{entry.startDate.time[:5]}}"
+         {% endif %}
+         {% if 'endDate' in entry %}
+           data-end-time="{{entry.endDate.time[:5]}}"
+         {% endif %}
+         data-duration="{{entry.duration}}"
+         {% if room is defined %}
+           data-room-name="{{room.room_name}}"
+           data-room-id="{{room.room_id}}"
+           data-venue-id="{{room.venue_id}}"
+         {% endif %}
+       {% else %}
+         draggable="false"
+       {% endif %}
+    {% if entry.description %}
+         title="{{entry.description|html_to_plaintext}}"
+    {% endif %}
+         style="{{grid(halfhour, entry.halfhour_span, room_index)}} {{colors}}"
+         target="_blank">
+      <span class="title">{{entry.title}}</span>
+      {% if entry.presenters %}
+        <span class="authors">
+          {{entry.presenters[0].name}}{% if entry.presenters|length > 1 %} {% trans %}et al{% endtrans %}{% endif %}
+        </span>
+      {% endif %}
+      <span class="time">
+        <span class="starttime">
+          {%- if entry.startDate is defined %}{{entry.startDate.time[:5]}}{% endif -%}
+        </span>–<span class="endtime">
+          {%- if entry.endDate is defined %}{{entry.endDate.time[:5]}}{% endif -%}
+        </span>
+      </span>
+      <span class="duration">{{entry.duration|int}}{% trans %}min{% endtrans %}</span>
+    </a>
+  {% elif entry.entryType == "Contribution" and entry.subcontributions and entry.halfhour_span > 0 %}
+    <div class="contribution hassubcontributions"
+         {% if management %}
+           draggable="true"
+           data-id="{{entry.scheduleEntryId|default('')}}"
+           data-contribution-id="{{entry.contributionId}}"
+           data-color="{{entry.textColor|default('black')}}"
+           data-background-color="{{entry.color|default('#f8f2e8')}}"
+           data-halfhour-start="{{halfhour}}"
+           data-halfhour-span="{{entry.halfhour_span}}"
+           data-duration="{{entry.duration}}"
+           {% if room is defined %}
+             data-room-name="{{room.room_name}}"
+             data-room-id="{{room.room_id}}"
+             data-venue-id="{{room.venue_id}}"
+           {% endif %}
+         {% endif %}
+         style="{{grid(halfhour, entry.halfhour_span, room_index)}} {{colors}}">
+      <span class="title">{{entry.title}}</span>
+      <div class="subcontributions">
+        {% for subcontrib in entry.subcontributions %}
+          {{show_entry(subcontrib, entry)}}
+        {% endfor %}
+      </div>
+      <span class="time">
+        <span class="starttime">
+          {%- if entry.startDate is defined %}{{entry.startDate.time[:5]}}{% endif -%}
+        </span>–<span class="endtime">
+          {%- if entry.endDate is defined %}{{entry.endDate.time[:5]}}{% endif -%}
+        </span>
+      </span>
+      <span class="duration">{{entry.duration|int}}{% trans %}min{% endtrans %}</span>
+    </div>
+  {% elif entry.entryType == "Subcontribution" %}
+    <a href="{{entry.url}}"
+       data-id="{{entry.subcontributionId}}"
+       draggable="false"
+       class="subcontribution"
+    {% if entry.description %}
+       title="{{entry.description|html_to_plaintext}}"
+    {% endif %}
+       target="_blank">
+      <span class="duration">{{entry.duration|round|int}}{% trans %}min{% endtrans %}</span>
+      <span class="title">{{entry.title}}</span>
+    </a>
+  {% elif entry.entryType == "Break" %}
+    <div class="break"
+         {% if entry.description %}
+           title="{{entry.description|html_to_plaintext}}"
+         {% endif %}
+           style="{{grid(halfhour, entry.halfhour_span, 1, rooms|length)}} {{ colors }}">
+      <span class="title">
+        {{entry.title}}
+      </span>
+      <span class="location">
+        {{entry.location_data.room_name|default(None)}}
+      </span>
+    </div>
+  {% elif entry.entryType == "Session" %}
+    <div href="{{entry.url}}"
+         target="_blank"
+         {% if management %}
+           data-id="{{entry.scheduleEntryId}}"
+           data-halfhour-start="{{halfhour}}"
+           data-halfhour-span="{{entry.halfhour_span}}"
+           data-color="{{entry.textColor|default('black')}}"
+           data-background-color="{{entry.color|default('#f8f2e8')}}"
+           data-room-name="{{room.room_name}}"
+           data-room-id="{{room.room_id}}"
+           data-venue-id="{{room.venue_id}}"
+         {% endif %}
+         class="session {% if entry.entries|length == 0 %}nocontributions{% endif %}"
+         style="{{grid(halfhour, entry.halfhour_span, room_index)}} --times: {{entry.halfhour_span}};">
+      <span
+         class="title"
+        {% if entry.description %}
+           title="{{entry.description|html_to_plaintext}}"
+        {% endif %}
+         style="{{colors}}"
+         >{{entry.slotTitle|default(entry.title)}}</span>
+      <div class="contributions">
+        {% for skey, sentry in entry.entries.items() %}
+          {{show_entry(sentry, entry, entry.halfhour_start) }}
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% set can_manage = event.can_manage(session.user) %}
+
+<div id="confSectionsBox" class="conf_leftMenu" style="display: none"></div>
+<div class="ngtimetable-header confheader" style="{{ conf_layout_params.bg_color_css }} {{ conf_layout_params.text_color_css }}">
+  <a class="icon-prev back" href="{{event.url}}" style="{{ conf_layout_params.text_color_css|default('color: black') }}">
+    {% if event.has_logo %}
+      <img src="{{ event.logo_url }}" alt="{{ event.title }}" border="0" class="conf-logo">
+    {% endif %}
+    <div class="details">
+      <div class="title">{{event.title}}</div>
+      <div class="date">{{format_event_date(event)}}</div>
+      <div class="place">{{ event.venue_name }}</div>
+    </div>
+  </a>
+</div>
+{% if not published %}
+  {{ render_draft_mode_warning(event) }}
+{% endif %}
+{% if management %}
+  <div class="ngtimetable-unscheduled">
+    {% for entry in unscheduled %}
+      {{show_entry(entry)}}
+    {% endfor %}
+  </div>
+{% endif %}
+<div class="ngtimetable" style="--rooms: {{rooms|length}};" {% if management %}data-management="true"{% endif %}>
+  {% if rooms.keys()|length > 1 %}
+    <div class="rooms">
+      {% if can_manage %}
+        {% if management %}
+          <a class="corner icon-cross" href="{{url_for_plugin('ngtimetable.view', event)}}"></a>
+        {% else %}
+          <a class="corner icon-wrench" href="{{url_for_plugin('ngtimetable.manage', event)}}"></a>
+        {% endif %}
+      {% else %}
+        <div class="corner"></div>
+      {% endif %}
+      {% for room_name, roomdata in rooms.items() %}
+        <div class="room"
+             data-room-id="{{roomdata.room_id}}"
+             data-venue-id="{{roomdata.venue_id}}">{{room_name}}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  <div class="schedule">
+  {% for date, daydata in timetable.items() %}
+    <a class="daymarker" id="{{daydata.weekday|lower}}">{{daydata.weekday}}, {{(daydata.date|format_date(format='long'))[:-6]}}</a>
+    <div class="timetable" data-date="{{date}}" style="--times: {{2 * (daydata.day_end - daydata.day_start + 1)}}">
+      {% for hour in range(daydata.day_start, daydata.day_end + 1) %}
+        <div class="timeslot" data-hour="{{hour}}">
+          <span class="weekday">{{daydata.weekday}}</span>
+          <span class="timestring">{{hour}}:00</span>
+        </div>
+      {% endfor %}
+      {% for key, entry in daydata.timetable.items() %}
+          {{ show_entry(entry) }}
+      {% endfor %}
+    </div>
+  {% endfor %}
+  </div>
+</div>
+<canvas id="dragcanvas" width="1" height="1"></canvas>
